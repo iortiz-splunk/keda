@@ -22,7 +22,7 @@ import (
 const (
 	queryParam    = "query"
 	targetValue   = "targetValue"
-	queryAggParam = "queryAggegrator"
+	queryAggParam = "queryAggregator"
 	actQueryVal   = "activationQueryValue"
 	metricName    = "metricName"
 	accessToken   = "accessToken"
@@ -39,7 +39,7 @@ type splunkO11yScaler struct {
 type splunkO11yMetadata struct {
 	query                string
 	targetValue          float64
-	queryAggegrator      string
+	queryAggregator      string
 	activationQueryValue float64
 	metricName           string
 	vType                v2.MetricTargetType
@@ -129,7 +129,7 @@ func parseSplunkO11yMetadata(config *scalersconfig.ScalerConfig, logger logr.Log
 		queryAggregator := strings.ToLower(val)
 		switch queryAggregator {
 		case "max", "min", "avg":
-			meta.queryAggegrator = queryAggregator
+			meta.queryAggregator = queryAggregator
 		default:
 			return nil, fmt.Errorf("queryAggregator value %s has to be one of 'max', 'min', or 'avg'.", queryAggParam)
 		}
@@ -221,11 +221,11 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 
 	s.logger.Info(fmt.Sprintf("ValueSum: %v, ValueCount: %v", valueSum, valueCount))
 
-	if valueCount > 1 && s.metadata.queryAggegrator == "" {
+	if valueCount > 1 && s.metadata.queryAggregator == "" {
 		return 0, fmt.Errorf("query returned more than 1 series; modify the query to return only 1 series or add a queryAggregator")
 	}
 
-	switch s.metadata.queryAggegrator {
+	switch s.metadata.queryAggregator {
 	case "max":
 		logMessage(s.logger, "Returning max value ", max)
 		return max, nil
