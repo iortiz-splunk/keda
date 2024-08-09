@@ -17,18 +17,28 @@ import (
 	"k8s.io/metrics/pkg/apis/external_metrics"
 
 	"github.com/kedacore/keda/v2/pkg/scalers/scalersconfig"
-	kedautil "github.com/kedacore/keda/v2/pkg/util"
+)
+
+const (
+	queryParam    = "query"
+	targetValue   = "targetValue"
+	queryAggParam = "queryAggegrator"
+	actQueryVal   = "activationQueryValue"
+	metricName    = "metricName"
+	accessToken   = "accessToken"
+	realm         = "realm"
 )
 
 type splunkO11yScaler struct {
-	metadata  *splunkO11yMetadata
-	apiClient *signalflow.Client
-	logger    logr.Logger
+	metricType v2.MetricTargetType
+	metadata   *splunkO11yMetadata
+	apiClient  *signalflow.Client
+	logger     logr.Logger
 }
 
 type splunkO11yMetadata struct {
 	query                string
-	queryValue           float64
+	targetValue          float64
 	queryAggegrator      string
 	activationQueryValue float64
 	metricName           string
@@ -38,119 +48,114 @@ type splunkO11yMetadata struct {
 }
 
 func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig) (Scaler, error) {
-	logger := InitializeLogger(config, "splunk_o11y_scaler")
+	logger := InitializeLogger(config, fmt.Sprintf("%s_scaler", scalerName))
 
+	logger.Info(fmt.Sprintf("Getting MetricType"))
+	metricType, err := GetMetricTargetType(config)
+	if err != nil {
+		return nil, fmt.Errorf("error getting scaler metric type: %w", err)
+	}
+
+	logger.Info(fmt.Sprintf("Parsing Metadata"))
 	meta, err := parseSplunkO11yMetadata(config, logger)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing Splunk metadata: %w", err)
+		return nil, fmt.Errorf("error parsing %s metadata: %w", scalerName, err)
 	}
 
-	apiClient, err := newSplunkO11yConnection(ctx, meta, config)
+	logger.Info(fmt.Sprintf("Creating SignalFLow Client"))
+	apiClient, err := signalflow.NewClient(
+		signalflow.StreamURLForRealm(meta.realm),
+		signalflow.AccessToken(meta.accessToken))
 	if err != nil {
-		return nil, fmt.Errorf("error establishing Splunk Observability Cloud connection: %w", err)
+		return nil, fmt.Errorf("error creating SignalFlow client: %w", err)
 	}
+	defer apiClient.Close()
 
 	return &splunkO11yScaler{
-		metadata:  meta,
-		apiClient: apiClient,
-		logger:    logger,
+		metricType: metricType,
+		metadata:   meta,
+		apiClient:  apiClient,
+		logger:     logger,
 	}, nil
 }
 
 func parseSplunkO11yMetadata(config *scalersconfig.ScalerConfig, logger logr.Logger) (*splunkO11yMetadata, error) {
 	meta := splunkO11yMetadata{}
+	var err error
 
 	// query
-	if query, ok := config.TriggerMetadata["query"]; ok {
-		meta.query = query
+	if val, ok := config.TriggerMetadata[queryParam]; ok && val != "" {
+		meta.query = val
 	} else {
-		return nil, fmt.Errorf("no query given")
+		return nil, fmt.Errorf("error parsing query param %e", err)
 	}
+	logger.Info(fmt.Sprintf("Parsed Query Param %s", meta.query))
 
 	// metric name
-	if metricName, ok := config.TriggerMetadata["metricName"]; ok {
-		meta.metricName = GenerateMetricNameWithIndex(config.TriggerIndex, kedautil.NormalizeString(fmt.Sprintf("signalfx-%s", metricName)))
+	if val, ok := config.TriggerMetadata[metricName]; ok && val != "" {
+		meta.metricName = val
 	} else {
-		return nil, fmt.Errorf("no metric name given")
+		return nil, fmt.Errorf("error parsing %s param %e", metricName, err)
 	}
 
-	// queryValue
-	if val, ok := config.TriggerMetadata["queryValue"]; ok {
-		queryValue, err := strconv.ParseFloat(val, 64)
+	// targetValue
+	if val, ok := config.TriggerMetadata[targetValue]; ok && val != "" {
+		t, err := strconv.ParseFloat(val, 64)
 		if err != nil {
-			return nil, fmt.Errorf("queryValue parsing error %w", err)
+			return nil, fmt.Errorf("error parsing %s", targetValue)
 		}
-		meta.queryValue = queryValue
+		meta.targetValue = t
 	} else {
 		if config.AsMetricSource {
-			meta.queryValue = 0
+			meta.targetValue = 0
 		} else {
-			return nil, fmt.Errorf("no queryValue given")
+			return nil, fmt.Errorf("missing %s value", targetValue)
 		}
 	}
+	logger.Info(fmt.Sprintf("Parsed TargetValue %v", meta.targetValue))
 
 	// activationQueryValue
 	meta.activationQueryValue = 0
-	if val, ok := config.TriggerMetadata["activationQueryValue"]; ok {
+	if val, ok := config.TriggerMetadata[actQueryVal]; ok {
 		activationQueryValue, err := strconv.ParseFloat(val, 64)
 		if err != nil {
-			return nil, fmt.Errorf("queryValue parsing error %w", err)
+			return nil, fmt.Errorf("%s parsing error %w", actQueryVal, err)
 		}
 		meta.activationQueryValue = activationQueryValue
 	}
 
 	// queryAggregator
-	if val, ok := config.TriggerMetadata["queryAggregator"]; ok && val != "" {
+	if val, ok := config.TriggerMetadata[queryAggParam]; ok && val != "" {
 		queryAggregator := strings.ToLower(val)
 		switch queryAggregator {
 		case "max", "min", "avg":
 			meta.queryAggegrator = queryAggregator
 		default:
-			return nil, fmt.Errorf("queryAggregator value %s has to be one of 'max', 'min', or 'avg'.", queryAggregator)
+			return nil, fmt.Errorf("queryAggregator value %s has to be one of 'max', 'min', or 'avg'.", queryAggParam)
 		}
 	} else {
-		meta.queryAggegrator = ""
+		return nil, fmt.Errorf("queryAggregator value %s has to be one of 'max', 'min', or 'avg'.", queryAggParam)
 	}
 
 	// accessToken
-	if accessToken, ok := config.AuthParams["accessToken"]; ok {
-		// cleanedAccessToken := strings.ReplaceAll(accessToken, "\n", "")
-		// cleanedAccessToken = strings.ReplaceAll(accessToken, "\r", "")
-		meta.accessToken = accessToken
-	} else {
-		return nil, fmt.Errorf("no accessToken given")
+	accessToken, err := GetFromAuthOrMeta(config, accessToken)
+	if err != nil {
+		return nil, err
 	}
+	meta.accessToken = accessToken
+
+	logger.Info(fmt.Sprintf("Parsed accessToken %v", meta.accessToken))
 
 	// realm
-	if realm, ok := config.TriggerMetadata["realm"]; ok {
-		meta.realm = realm
-	} else {
-		return nil, fmt.Errorf("no realm given")
+	realm, err := GetFromAuthOrMeta(config, realm)
+	if err != nil {
+		return nil, err
 	}
-	logger.Info("Splunk Realm -> %s\n", meta.realm)
+	meta.realm = realm
 
-	// Debug TODO check
-	meta.vType = v2.ValueMetricType
+	logger.Info(fmt.Sprintf("Parsed realm %v", meta.realm))
 
 	return &meta, nil
-}
-
-func newSplunkO11yConnection(ctx context.Context, meta *splunkO11yMetadata, config *scalersconfig.ScalerConfig) (*signalflow.Client, error) {
-	accessToken := meta.accessToken
-	realm := meta.realm
-
-	if realm == "" || accessToken == "" {
-		return nil, fmt.Errorf("error. could not find splunk access token or ream.")
-	}
-
-	apiClient, err := signalflow.NewClient(
-		signalflow.StreamURLForRealm(realm),
-		signalflow.AccessToken(accessToken))
-	if err != nil {
-		return nil, fmt.Errorf("error creating SignalFlow client: %w", err)
-	}
-
-	return apiClient, nil
 }
 
 func logMessage(logger logr.Logger, msg string, value float64) {
@@ -166,6 +171,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	// var duration time.Duration = 1000000000 // one second in nano seconds
 	var duration time.Duration = 10000000000 // ten seconds in nano seconds
 
+	// Need to add the additional parameters
 	comp, err := s.apiClient.Execute(context.Background(), &signalflow.ExecuteRequest{
 		Program: s.metadata.query,
 	})
@@ -173,6 +179,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 		return -1, fmt.Errorf("error: could not execute signalflow query: %w", err)
 	}
 
+	// Why do we force it to sleep ?
 	go func() {
 		time.Sleep(duration)
 		if err := comp.Stop(context.Background()); err != nil {
@@ -193,6 +200,8 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 			s.logger.Info("getQueryResult -> No data retreived. Continuing")
 			continue
 		}
+
+		s.logger.Info(fmt.Sprintf("Query Payload: %+v\n", msg.Payloads))
 		for _, pl := range msg.Payloads {
 			value, ok := pl.Value().(float64)
 			if !ok {
@@ -209,6 +218,8 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 			valueCount++
 		}
 	}
+
+	s.logger.Info(fmt.Sprintf("ValueSum: %v, ValueCount: %v", valueSum, valueCount))
 
 	if valueCount > 1 && s.metadata.queryAggegrator == "" {
 		return 0, fmt.Errorf("query returned more than 1 series; modify the query to return only 1 series or add a queryAggregator")
@@ -251,7 +262,7 @@ func (s *splunkO11yScaler) GetMetricSpecForScaling(context.Context) []v2.MetricS
 		Metric: v2.MetricIdentifier{
 			Name: s.metadata.metricName,
 		},
-		Target: GetMetricTargetMili(s.metadata.vType, s.metadata.queryValue),
+		Target: GetMetricTargetMili(s.metadata.vType, s.metadata.targetValue),
 	}
 	metricSpec := v2.MetricSpec{
 		External: externalMetric, Type: externalMetricType,
