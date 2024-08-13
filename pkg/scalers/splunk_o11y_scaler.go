@@ -27,6 +27,7 @@ const (
 	metricName    = "metricName"
 	accessToken   = "accessToken"
 	realm         = "realm"
+	scalerName    = "splunkO11yScaler"
 )
 
 type splunkO11yScaler struct {
@@ -57,7 +58,7 @@ func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig
 	}
 
 	logger.Info(fmt.Sprintf("Parsing Metadata"))
-	meta, err := parseSplunkO11yMetadata(config, logger)
+	meta, err := ParseMetaData(config, logger)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing %s metadata: %w", scalerName, err)
 	}
@@ -69,7 +70,7 @@ func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig
 	if err != nil {
 		return nil, fmt.Errorf("error creating SignalFlow client: %w", err)
 	}
-	defer apiClient.Close()
+	//defer apiClient.Close()
 
 	return &splunkO11yScaler{
 		metricType: metricType,
@@ -79,7 +80,7 @@ func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig
 	}, nil
 }
 
-func parseSplunkO11yMetadata(config *scalersconfig.ScalerConfig, logger logr.Logger) (*splunkO11yMetadata, error) {
+func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*splunkO11yMetadata, error) {
 	meta := splunkO11yMetadata{}
 	var err error
 
@@ -195,7 +196,6 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	valueCount := 0
 	s.logger.Info("getQueryResult -> Now Iterating")
 	for msg := range comp.Data() {
-		s.logger.Info("getQueryResult -> msg: %+v\n", msg)
 		if len(msg.Payloads) == 0 {
 			s.logger.Info("getQueryResult -> No data retreived. Continuing")
 			continue
@@ -242,13 +242,15 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 }
 
 func (s *splunkO11yScaler) GetMetricsAndActivity(ctx context.Context, metricName string) ([]external_metrics.ExternalMetricValue, bool, error) {
-	// s.logger.Info(fmt.Sprintf("splunk_o11y_scaler found authtrigger token : %s", s.metadata.accessToken))
-	num, err := s.getQueryResult(ctx)
 
+	s.logger.Info("GetMetricsAndActivity")
+	num, err := s.getQueryResult(ctx)
 	if err != nil {
 		s.logger.Error(err, "error getting metrics from Splunk Observability Cloud.")
 		return []external_metrics.ExternalMetricValue{}, false, fmt.Errorf("error getting metrics from Splunk Observability Cloud: %w", err)
 	}
+
+	s.logger.Info("GenerateMetricInMili")
 	metric := GenerateMetricInMili(metricName, num)
 
 	logMessage(s.logger, "num", num)
@@ -258,11 +260,13 @@ func (s *splunkO11yScaler) GetMetricsAndActivity(ctx context.Context, metricName
 }
 
 func (s *splunkO11yScaler) GetMetricSpecForScaling(context.Context) []v2.MetricSpec {
+
+	s.logger.Info("GetMetricSpecForScaling")
 	externalMetric := &v2.ExternalMetricSource{
 		Metric: v2.MetricIdentifier{
 			Name: s.metadata.metricName,
 		},
-		Target: GetMetricTargetMili(s.metadata.vType, s.metadata.targetValue),
+		Target: GetMetricTargetMili(s.metricType, s.metadata.targetValue),
 	}
 	metricSpec := v2.MetricSpec{
 		External: externalMetric, Type: externalMetricType,
