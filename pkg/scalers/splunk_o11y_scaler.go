@@ -220,7 +220,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 				return -1, fmt.Errorf("error: could not convert Splunk Observability metric value to float64")
 			}
 			logMessage(s.logger, "Encountering value ", value)
-			s.logger.Info("Encountering value ", value)
+			s.logger.Info("Encountering value2 %+v\n", value)
 			if value > max {
 				max = value
 			}
