@@ -177,6 +177,8 @@ func logMessage(logger logr.Logger, msg string, value float64) {
 }
 
 func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) {
+	s.logger.Info("getQueryResult")
+
 	// var duration time.Duration = 1000000000 // one second in nano seconds
 	var duration time.Duration = 10000000000 // ten seconds in nano seconds
 
@@ -197,25 +199,28 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	}()
 
 	logMessage(s.logger, "Received Splunk Observability metrics", -1)
+	s.logger.Info("Received Splunk Observability metrics")
 
 	max := math.Inf(-1)
 	min := math.Inf(1)
 	valueSum := 0.0
 	valueCount := 0
+
 	s.logger.Info("getQueryResult -> Now Iterating")
+	s.logger.Info("Comp Data: %+v\n", comp.Data())
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
 			s.logger.Info("getQueryResult -> No data retreived. Continuing")
-			continue
+			continue // If tere is no
 		}
 
-		s.logger.Info(fmt.Sprintf("Query Payload: %+v\n", msg.Payloads))
 		for _, pl := range msg.Payloads {
 			value, ok := pl.Value().(float64)
 			if !ok {
 				return -1, fmt.Errorf("error: could not convert Splunk Observability metric value to float64")
 			}
 			logMessage(s.logger, "Encountering value ", value)
+			s.logger.Info("Encountering value ", value)
 			if value > max {
 				max = value
 			}
