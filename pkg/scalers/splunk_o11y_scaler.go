@@ -141,9 +141,10 @@ func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*spl
 	if err != nil {
 		return nil, err
 	}
-	meta.accessToken = accessToken
 
-	logger.Info(fmt.Sprintf("Parsed accessToken %v", meta.accessToken))
+	logger.Info(fmt.Sprintf("Parsed accessToken %v", accessToken))
+	logger.Info(fmt.Sprintf("Token Length: %v", len(accessToken)))
+	meta.accessToken = accessToken
 
 	// realm
 	realm, err := GetFromAuthOrMeta(config, realm)
