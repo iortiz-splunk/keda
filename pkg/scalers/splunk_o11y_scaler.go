@@ -27,7 +27,7 @@ const (
 	metricName    = "metricName"
 	accessToken   = "accessToken"
 	realm         = "realm"
-	scalerName    = "splunkO11yScaler"
+	scalerName    = "splunk-o11y-scaler"
 )
 
 type splunkO11yScaler struct {
@@ -49,7 +49,7 @@ type splunkO11yMetadata struct {
 }
 
 func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig) (Scaler, error) {
-	logger := InitializeLogger(config, fmt.Sprintf("%s_scaler", scalerName))
+	logger := InitializeLogger(config, scalerName)
 
 	logger.Info(fmt.Sprintf("Getting MetricType"))
 	metricType, err := GetMetricTargetType(config)
@@ -70,7 +70,6 @@ func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig
 	if err != nil {
 		return nil, fmt.Errorf("error creating SignalFlow client: %w", err)
 	}
-	//defer apiClient.Close()
 
 	return &splunkO11yScaler{
 		metricType: metricType,
