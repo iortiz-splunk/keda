@@ -144,6 +144,15 @@ func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*spl
 
 	logger.Info(fmt.Sprintf("Parsed accessToken %v", accessToken))
 	logger.Info(fmt.Sprintf("Token Length: %v", len(accessToken)))
+
+	// Try to clean token
+	accessToken = strings.ReplaceAll(accessToken, "\n", "")
+	accessToken = strings.ReplaceAll(accessToken, " ", "")
+	accessToken = strings.ReplaceAll(accessToken, "\t", "")
+
+	logger.Info(fmt.Sprintf("CLeaned Token: %v", accessToken))
+	logger.Info(fmt.Sprintf("Token Length: %v", len(accessToken)))
+
 	meta.accessToken = accessToken
 
 	// realm
