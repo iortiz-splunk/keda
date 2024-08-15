@@ -202,7 +202,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	//logMessage(s.logger, "Received Splunk Observability metrics", -1)
 	s.logger.Info("Received Splunk Observability metrics")
 
-	max := math.Inf(-1)
+	max := math.Inf(0) // Don't see why it can't be 0 either, min and max can be equal if there is only a single value
 	min := math.Inf(0) // Min should likely be 0 as query values can be very small float values.
 	valueSum := 0.0
 	valueCount := 0
@@ -210,8 +210,8 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	s.logger.Info("getQueryResult -> Now Iterating")
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
-			s.logger.Info("getQueryResult -> No data retreived. Continuing")
-			continue // If tere is no
+			logMessage(s.logger, "getQueryResult -> No data retreived", -1)
+			continue
 		}
 
 		for _, pl := range msg.Payloads {
@@ -238,6 +238,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 		return 0, fmt.Errorf("query returned more than 1 series; modify the query to return only 1 series or add a queryAggregator")
 	}
 
+	// NaN are being returned when no value comes back from the query as its dividing valueSum/ValueCount 0/0. Need to think of how to handle no values better
 	switch s.metadata.queryAggregator {
 	case "max":
 		logMessage(s.logger, "Returning max value ", max)
@@ -246,7 +247,11 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 		logMessage(s.logger, "Returning min value ", min)
 		return min, nil
 	case "avg":
-		avg := valueSum / float64(valueCount)
+		avg := 0.0
+		if valueCount > 0.0 {
+			avg = valueSum / float64(valueCount)
+		}
+
 		logMessage(s.logger, "Returning avg value ", avg)
 		return avg, nil
 	default:
