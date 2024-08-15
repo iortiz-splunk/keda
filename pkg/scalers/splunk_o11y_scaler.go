@@ -169,9 +169,9 @@ func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*spl
 
 func logMessage(logger logr.Logger, msg string, value float64) {
 	if value != -1 {
-		msg = fmt.Sprintf("splunk_o11y_scaler: %s -> %v", msg, value)
+		msg = fmt.Sprintf("%s -> %v", msg, value)
 	} else {
-		msg = fmt.Sprintf("splunk_o11y_scaler: %s", msg)
+		msg = fmt.Sprintf("%s", msg)
 	}
 	logger.Info(msg)
 }
@@ -179,6 +179,7 @@ func logMessage(logger logr.Logger, msg string, value float64) {
 func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) {
 	s.logger.Info("getQueryResult")
 
+	// Why Ten Seconds ??
 	// var duration time.Duration = 1000000000 // one second in nano seconds
 	var duration time.Duration = 10000000000 // ten seconds in nano seconds
 
@@ -198,16 +199,15 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 		}
 	}()
 
-	logMessage(s.logger, "Received Splunk Observability metrics", -1)
+	//logMessage(s.logger, "Received Splunk Observability metrics", -1)
 	s.logger.Info("Received Splunk Observability metrics")
 
 	max := math.Inf(-1)
-	min := math.Inf(1)
+	min := math.Inf(0) // Min should likely be 0 as query values can be very small float values.
 	valueSum := 0.0
 	valueCount := 0
 
 	s.logger.Info("getQueryResult -> Now Iterating")
-	s.logger.Info("Comp Data: %+v\n", comp.Data())
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
 			s.logger.Info("getQueryResult -> No data retreived. Continuing")
@@ -219,8 +219,8 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 			if !ok {
 				return -1, fmt.Errorf("error: could not convert Splunk Observability metric value to float64")
 			}
+
 			logMessage(s.logger, "Encountering value ", value)
-			s.logger.Info("Encountering value2 %+v\n", value)
 			if value > max {
 				max = value
 			}
@@ -229,10 +229,10 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 			}
 			valueSum += value
 			valueCount++
+
+			s.logger.Info(fmt.Sprintf("ValueSum: %v, ValueCount: %v", valueSum, valueCount))
 		}
 	}
-
-	s.logger.Info(fmt.Sprintf("ValueSum: %v, ValueCount: %v", valueSum, valueCount))
 
 	if valueCount > 1 && s.metadata.queryAggregator == "" {
 		return 0, fmt.Errorf("query returned more than 1 series; modify the query to return only 1 series or add a queryAggregator")
