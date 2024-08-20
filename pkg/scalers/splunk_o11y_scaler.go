@@ -199,15 +199,14 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 		}
 	}()
 
-	//logMessage(s.logger, "Received Splunk Observability metrics", -1)
-	s.logger.Info("Received Splunk Observability metrics")
+	logMessage(s.logger, "Received Splunk Observability metrics", -1)
 
 	max := math.Inf(0) // Don't see why it can't be 0 either, min and max can be equal if there is only a single value
 	min := math.Inf(0) // Min should likely be 0 as query values can be very small float values.
 	valueSum := 0.0
 	valueCount := 0
 
-	s.logger.Info("getQueryResult -> Now Iterating")
+	logMessage(s.logger, "getQueryResult -> Now Iterating", -1)
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
 			logMessage(s.logger, "getQueryResult -> No data retreived", -1)
