@@ -64,8 +64,12 @@ func NewSplunkO11yScaler(ctx context.Context, config *scalersconfig.ScalerConfig
 
 	logger.Info(fmt.Sprintf("Creating SignalFLow Client"))
 	apiClient, err := signalflow.NewClient(
-		signalflow.StreamURLForRealm(meta.realm),
-		signalflow.AccessToken(meta.accessToken))
+		signalflow.StreamURLForRealm(realm),
+		signalflow.AccessToken(accessToken),
+		signalflow.OnError(func(err error) {
+			error_msg := fmt.Sprintf("error in SignalFlow client: %v\n", err)
+			logger.Info(error_msg)
+		}))
 	if err != nil {
 		return nil, fmt.Errorf("error creating SignalFlow client: %w", err)
 	}
