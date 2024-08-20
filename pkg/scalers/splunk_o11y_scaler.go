@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	//"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	// "github.com/signalfx/signalfx-go/signalflow/v2"
@@ -39,6 +39,7 @@ type splunkO11yScaler struct {
 type splunkO11yMetadata struct {
 	query                string
 	targetValue          float64
+	duration             int
 	queryAggregator      string
 	activationQueryValue float64
 	metricName           string
@@ -89,6 +90,22 @@ func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*spl
 		return nil, fmt.Errorf("error parsing query param %e", err)
 	}
 	logger.Info(fmt.Sprintf("Parsed Query Param %s", meta.query))
+
+	// duration
+	if duration, ok := config.TriggerMetadata["duration"]; ok {
+		durationInt, err := strconv.Atoi(duration)
+		if err != nil {
+			return nil, fmt.Errorf("duration parsing error %w", err)
+		}
+
+		if durationInt < 1 {
+			return nil, fmt.Errorf("duration must be greater than or equal to 1")
+		}
+		meta.duration = durationInt
+	} else {
+		logger.Info(fmt.Sprintf("No duration provided, using default of 10"))
+		meta.duration = 10
+	}
 
 	// metric name
 	if val, ok := config.TriggerMetadata[metricName]; ok && val != "" {
@@ -179,11 +196,11 @@ func logMessage(logger logr.Logger, msg string, value float64) {
 func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) {
 	s.logger.Info("getQueryResult")
 
-	// Why Ten Seconds ??
-	// var duration time.Duration = 1000000000 // one second in nano seconds
-	var duration time.Duration = 10000000000 // ten seconds in nano seconds
+	// // Why Ten Seconds ??
+	// // var duration time.Duration = 1000000000 // one second in nano seconds
+	// var duration time.Duration = 10000000000 // ten seconds in nano seconds
 
-	// Need to add the additional parameters
+	// // Need to add the additional parameters
 	comp, err := s.apiClient.Execute(context.Background(), &signalflow.ExecuteRequest{
 		Program: s.metadata.query,
 	})
@@ -192,12 +209,17 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	}
 
 	// Why do we force it to sleep ?
-	go func() {
-		time.Sleep(duration)
-		if err := comp.Stop(context.Background()); err != nil {
-			s.logger.Info("Failed to stop computation")
-		}
-	}()
+	// go func() {
+	// 	time.Sleep(duration)
+	// 	if err := comp.Stop(context.Background()); err != nil {
+	// 		s.logger.Info("Failed to stop computation")
+	// 	}
+	// }()
+
+	time.Sleep(time.Duration(s.metadata.duration))
+	if err := comp.Stop(context.Background()); err != nil {
+		return -1, fmt.Errorf("error stopping SignalFlow client: %w", err) // TODO why -1?
+	}
 
 	logMessage(s.logger, "Received Splunk Observability metrics", -1)
 
