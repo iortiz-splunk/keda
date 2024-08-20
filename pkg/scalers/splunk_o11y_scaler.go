@@ -217,7 +217,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	// 	}
 	// }()
 
-	logMessage(s.logger, "Waiting for data", -1)
+	logMessage(s.logger, "Waiting for data for duration: %v", float64(s.metadata.duration))
 	time.Sleep(time.Duration(s.metadata.duration))
 	if err := comp.Stop(context.Background()); err != nil {
 		return -1, fmt.Errorf("error stopping SignalFlow client: %w", err) // TODO why -1?
