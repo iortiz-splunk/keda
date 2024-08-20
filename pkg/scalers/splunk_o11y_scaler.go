@@ -217,23 +217,24 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	// 	}
 	// }()
 
-	logMessage(s.logger, "Waiting for data for duration: %v", float64(s.metadata.duration))
+	s.logger.Info(fmt.Sprintln("Waiting for data for duration: %v", float64(s.metadata.duration)))
 	time.Sleep(time.Duration(s.metadata.duration))
 	if err := comp.Stop(context.Background()); err != nil {
 		return -1, fmt.Errorf("error stopping SignalFlow client: %w", err) // TODO why -1?
 	}
 
-	logMessage(s.logger, "Received Splunk Observability metrics", -1)
-
+	s.logger.Info(fmt.Sprintln("Received Splunk Observability metrics"))
 	max := math.Inf(0) // Don't see why it can't be 0 either, min and max can be equal if there is only a single value
 	min := math.Inf(0) // Min should likely be 0 as query values can be very small float values.
 	valueSum := 0.0
 	valueCount := 0
 
-	logMessage(s.logger, "getQueryResult -> Now Iterating", -1)
+	// logMessage(s.logger, "getQueryResult -> Now Iterating", -1)
+	s.logger.Info(fmt.Sprintln("getQueryResult -> Now Iterating"))
 	for msg := range comp.Data() {
 		if len(msg.Payloads) == 0 {
-			logMessage(s.logger, "getQueryResult -> No data retreived", -1)
+			// logMessage(s.logger, "getQueryResult -> No data retreived", -1)
+			s.logger.Info(fmt.Sprintln("getQueryResult -> No data retreived"))
 			continue
 		}
 
@@ -243,7 +244,8 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 				return -1, fmt.Errorf("error: could not convert Splunk Observability metric value to float64")
 			}
 
-			logMessage(s.logger, "Encountering value ", value)
+			// logMessage(s.logger, "Encountering value ", value)
+			s.logger.Info(fmt.Sprintln("Encountering value %v", value))
 			if value > max {
 				max = value
 			}
