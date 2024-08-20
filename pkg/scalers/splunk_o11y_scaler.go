@@ -106,6 +106,7 @@ func ParseMetaData(config *scalersconfig.ScalerConfig, logger logr.Logger) (*spl
 		logger.Info(fmt.Sprintf("No duration provided, using default of 10"))
 		meta.duration = 10
 	}
+	logger.Info(fmt.Sprintf("Parsed duration Param %s", meta.duration))
 
 	// metric name
 	if val, ok := config.TriggerMetadata[metricName]; ok && val != "" {
@@ -216,6 +217,7 @@ func (s *splunkO11yScaler) getQueryResult(ctx context.Context) (float64, error) 
 	// 	}
 	// }()
 
+	logMessage(s.logger, "Waiting for data", -1)
 	time.Sleep(time.Duration(s.metadata.duration))
 	if err := comp.Stop(context.Background()); err != nil {
 		return -1, fmt.Errorf("error stopping SignalFlow client: %w", err) // TODO why -1?
